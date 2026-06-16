@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# ===========================================================================
+# c4walker — ultimaC4walker
+#
+# Ready-to-run processing & QC workflow for the four chromatin-profiling
+# assays: ChIP-seq, CUT&RUN, CUT&Tag and ATAC-seq. Takes FASTQ to filtered
+# BAMs, MACS2 peaks, bigWig tracks, a full QC suite and a MultiQC report,
+# locally or on SLURM / PBS clusters.
+#
+#   c4walker run -c config.yaml -s samples.tsv
+#   c4walker run -c config.yaml -s samples.tsv --dry-run
+#   c4walker run -c config.yaml -s samples.tsv --run-single SAMPLE_ID
+#
+# See USAGE.md for the full reference. Authors: Eric Bareke, Ethan M.,
+# Conrad B. — MIT licensed.
+# ===========================================================================
+set -euo pipefail
+
+C4_VERSION="1.0.0"
+
+# --- resolve our own location so lib/ is found whether run in-tree or installed
+_src="${BASH_SOURCE[0]}"
+while [ -h "$_src" ]; do
+  _dir="$(cd -P "$(dirname "$_src")" && pwd)"
+  _src="$(readlink "$_src")"
+  case "$_src" in /*) ;; *) _src="$_dir/$_src" ;; esac
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$_src")" && pwd)"
+LIBDIR="${C4_LIBDIR:-$SCRIPT_DIR/../lib}"
+[ -f "$LIBDIR/common.sh" ] || LIBDIR="$SCRIPT_DIR/lib"          # installed flat
+C4_SELF="$SCRIPT_DIR/$(basename "$_src")"
+
+# shellcheck source=lib/common.sh
+. "$LIBDIR/common.sh"
+# shellcheck source=lib/align.sh
+. "$LIBDIR/align.sh"
+# shellcheck source=lib/filter.sh
+. "$LIBDIR/filter.sh"
+# shellcheck source=lib/peaks.sh
+. "$LIBDIR/peaks.sh"
+# shellcheck source=lib/signal.sh
+. "$LIBDIR/signal.sh"
+# shellcheck source=lib/qc.sh
+. "$LIBDIR/qc.sh"
+# shellcheck source=lib/hpc.sh
+. "$LIBDIR/hpc.sh"
+
+# ---------------------------------------------------------------------------
+usage() {
+  cat <<EOF
+ultimaC4walker (c4walker) v${C4_VERSION}
+Chromatin-profiling workflow — ChIP-seq | CUT&RUN | CUT&Tag | ATAC-seq
+
+USAGE:
+  c4walker run     -c CONFIG -s SAMPLES [--run-single ID] [--dry-run]
+  c4walker check   -c CONFIG -s SAMPLES        validate config + sample sheet
+  c4walker version
+  c4walker help
+
+OPTIONS:
+  -c, --config FILE    YAML config (see config/config.yaml)
+  -s, --samples FILE   Tab-delimited sample sheet (see config/samples.tsv)
+      --run-single ID  Process a single SAMPLE_ID (used by HPC job scripts)
+      --dry-run        Print every command instead of running it
+  -h, --help           Show this help
+
+DOCS: https://ebareke.github.io/ultimaC4walker/
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Sample-sheet validation. Columns (tab-delimited, header required):
+#   SAMPLE_ID  FASTQ1  FASTQ2  ASSAY  MARK  CONTROL_ID  LIBTYPE
+# ASSAY   ∈ CHIPSEQ | CUTRUN | CUTTAG | ATAC
+# LIBTYPE ∈ PE | SE
+# ---------------------------------------------------------------------------
+validate_samples() {
+  local file="$1" n=0 errs=0 lineno=0
+  [ -f "$file" ] || die "sample sheet not found: $file"
+  while IFS=$'\t' read -r sid f1 f2 assay mark ctrl lib _rest || [ -n "${sid:-}" ]; do
+    lineno=$((lineno+1))
+    [ -z "${sid:-}" ] && continue
+    case "$sid" in SAMPLE_ID|\#*) continue ;; esac
+    n=$((n+1))
+    case "$(printf '%s' "${assay:-}" | tr '[:lower:]' '[:upper:]')" in
+      CHIPSEQ|CUTRUN|CUTTAG|ATAC) ;;
+      *) log_err "line $lineno ($sid): invalid ASSAY '${assay:-}'"; errs=$((errs+1)) ;;
+    esac
+    case "$(printf '%s' "${lib:-}" | tr '[:lower:]' '[:upper:]')" in
+      PE|SE) ;;
+      *) log_err "line $lineno ($sid): invalid LIBTYPE '${lib:-}' (PE|SE)"; errs=$((errs+1)) ;;
+    esac
+    [ -n "${f1:-}" ] || { log_err "line $lineno ($sid): empty FASTQ1"; errs=$((errs+1)); }
+  done < "$file"
+  [ "$n" -gt 0 ] || die "no samples found in $file"
+  [ "$errs" -eq 0 ] || die "$errs sample-sheet error(s)"
+  log_ok "sample sheet OK ($n sample(s))"
+}
+
+# ---------------------------------------------------------------------------
+process_sample() {
+  local sid="$1" f1="$2" f2="$3" assay="$4" mark="$5" ctrl="$6" lib="$7"
+  assay="$(printf '%s' "$assay" | tr '[:lower:]' '[:upper:]')"
+  lib="$(printf '%s' "$lib" | tr '[:lower:]' '[:upper:]')"
+
+  log_info "sample=$sid assay=$assay mark=$mark libtype=$lib control=$ctrl"
+
+  local a="$OUTDIR/align/$sid"  q="$OUTDIR/qc/$sid"
+  local p="$OUTDIR/peaks/$sid"  b="$OUTDIR/bigwig/$sid"
+  mkdir -p "$a" "$q" "$p" "$b"
+
+  c4_fastqc "$f1" "$f2" "$lib" "$q"
+
+  local sorted="$a/${sid}.sorted.bam"
+  c4_align "$sid" "$f1" "$f2" "$lib" "$sorted"
+
+  local final; final="$(c4_filter "$sid" "$sorted" "$a" "$q")"
+  [ "${DRYRUN:-0}" -eq 1 ] && final="$a/${sid}.filtered.nodup.bam"
+
+  c4_align_qc      "$sid" "$final" "$q"
+  c4_callpeak      "$sid" "$final" "$assay" "$mark" "$ctrl" "$lib" "$OUTDIR" "$p"
+  c4_frip          "$sid" "$final" "$p" "$q"
+  c4_bigwig        "$sid" "$final" "$assay" "$b"
+  c4_fragment_size "$sid" "$final" "$lib" "$q"
+  c4_preseq        "$sid" "$final" "$a" "$q"
+  c4_phantompeak   "$sid" "$final" "$lib" "$q"
+
+  log_ok "sample completed: $sid"
+}
+
+# ---------------------------------------------------------------------------
+iterate_samples() {
+  local mode="$1"
+  while IFS=$'\t' read -r sid f1 f2 assay mark ctrl lib _rest || [ -n "${sid:-}" ]; do
+    [ -z "${sid:-}" ] && continue
+    case "$sid" in SAMPLE_ID|\#*) continue ;; esac
+    [ -n "$RUN_SINGLE_ID" ] && [ "$RUN_SINGLE_ID" != "$sid" ] && continue
+    : "${f2:=-}" "${ctrl:=None}"
+    case "$mode" in
+      local) process_sample "$sid" "$f1" "$f2" "$assay" "$mark" "$ctrl" "$lib" ;;
+      slurm) c4_submit_slurm "$sid" ;;
+      pbs)   c4_submit_pbs   "$sid" ;;
+    esac
+  done < "$SAMPLES"
+}
+
+# ---------------------------------------------------------------------------
+cmd_run() {
+  validate_samples "$SAMPLES"
+  load_yaml_config "$CONFIG_YAML"
+
+  RUN_MODE="$(cfg RUN_MODE local)"
+  OUTDIR="$(cfg OUTDIR ./c4walker_out)"
+  export OUTDIR CONFIG_YAML SAMPLES RUN_SINGLE_ID C4_SELF
+
+  mkdir -p "$OUTDIR" "$OUTDIR/logs" "$OUTDIR/align" "$OUTDIR/qc" \
+           "$OUTDIR/peaks" "$OUTDIR/bigwig"
+
+  # Validate the mandatory tools (skipped automatically under --dry-run).
+  require_tool bwa      "$(cfg BWA bwa)"
+  require_tool samtools "$(cfg SAMTOOLS samtools)"
+  require_tool bedtools "$(cfg BEDTOOLS bedtools)"
+  require_tool "macs (macs3/macs2)" "$(c4_macs_bin)"
+  require_tool fastqc   "$(cfg FASTQC fastqc)"
+
+  log_info "project=$(cfg PROJECT_NAME c4walker) mode=$RUN_MODE outdir=$OUTDIR threads=$(cfg THREADS 4)"
+
+  case "$RUN_MODE" in
+    local)
+      iterate_samples local
+      [ -z "$RUN_SINGLE_ID" ] && c4_multiqc "$OUTDIR"
+      ;;
+    slurm) iterate_samples slurm ;;
+    pbs)   iterate_samples pbs ;;
+    *)     die "run_mode must be local|slurm|pbs (got '$RUN_MODE')" ;;
+  esac
+  log_ok "pipeline finished (mode=$RUN_MODE)"
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+CONFIG_YAML=""; SAMPLES=""; RUN_SINGLE_ID=""; DRYRUN=0
+SUBCMD="${1:-help}"; shift || true
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c|--config)   CONFIG_YAML="${2:?}"; shift 2 ;;
+    -s|--samples)  SAMPLES="${2:?}"; shift 2 ;;
+    --run-single)  RUN_SINGLE_ID="${2:?}"; shift 2 ;;
+    --dry-run)     DRYRUN=1; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    *)             die "unknown argument: $1" ;;
+  esac
+done
+export DRYRUN
+
+case "$SUBCMD" in
+  run)
+    [ -n "$CONFIG_YAML" ] || die "run requires -c CONFIG"
+    [ -n "$SAMPLES" ]     || die "run requires -s SAMPLES"
+    cmd_run
+    ;;
+  check)
+    [ -n "$SAMPLES" ]     || die "check requires -s SAMPLES"
+    [ -n "$CONFIG_YAML" ] || die "check requires -c CONFIG"
+    validate_samples "$SAMPLES"
+    load_yaml_config "$CONFIG_YAML"
+    log_ok "config loaded: project=$(cfg PROJECT_NAME c4walker) genome_size=$(cfg GENOME_SIZE hs)"
+    ;;
+  version|--version|-V) echo "ultimaC4walker (c4walker) v${C4_VERSION}" ;;
+  help|--help|-h)       usage ;;
+  *) die "unknown subcommand: $SUBCMD (try 'c4walker help')" ;;
+esac

@@ -1,0 +1,37 @@
+# ===========================================================================
+# ultimaC4walker — container-optimised configuration
+# All tools resolve from the bundled conda environment, so only the genome
+# resources (mounted under /data) need real paths.
+# ===========================================================================
+
+project_name: DemoContainerRun
+outdir: /data/c4walker_out
+run_mode: local
+threads: 8
+
+bwa_index: /data/ref/hg38/bwa/hg38
+genome_size: hs
+mito_chr: chrM
+blacklist_bed: /data/ref/hg38/blacklist/hg38-blacklist.v2.bed
+
+min_mapq: 30
+remove_duplicates: 1
+
+macs2_qval: 0.01
+macs2_broad_qval: 0.1
+shift_extend_cuttag: "--nomodel --shift -75 --extsize 150"
+shift_extend_atac:   "--nomodel --shift -100 --extsize 200"
+
+bigwig_norm: RPKM
+
+# Bundled in the image — bare names resolve on PATH.
+bwa: bwa
+samtools: samtools
+bedtools: bedtools
+macs3: macs3
+fastqc: fastqc
+bamcoverage: bamCoverage
+multiqc: multiqc
+picard: picard
+rscript: Rscript
+phantompeak_rscript: /opt/conda/bin/run_spp.R

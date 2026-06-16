@@ -1,0 +1,59 @@
+# ===========================================================================
+# ultimaC4walker — native (non-container) configuration
+# Flat key: value YAML. Lines starting with '#' and blank lines are ignored.
+# CLI flags always take precedence over values set here.
+# ===========================================================================
+
+project_name: MyChromatinProject
+outdir: c4walker_out
+
+# Execution mode: local | slurm | pbs
+run_mode: local
+
+# Resources
+threads: 16
+
+# ---- Reference / genome resources -----------------------------------------
+bwa_index: /ref/hg38/bwa/hg38              # bwa index prefix
+genome_size: hs                            # MACS2 gsize: hs|mm|ce|dm or e.g. 2.7e9
+mito_chr: chrM                             # mitochondrial contig (empty = keep)
+chroms_keep_list: ""                       # optional file, one chrom per line
+blacklist_bed: /ref/hg38/blacklist/hg38-blacklist.v2.bed
+
+# ---- Filtering ------------------------------------------------------------
+min_mapq: 30
+remove_duplicates: 1                       # 1 = remove, 0 = keep
+
+# ---- MACS2 ----------------------------------------------------------------
+macs2_qval: 0.01                           # narrow-peak q-value
+macs2_broad_qval: 0.1                      # broad-mark cutoff
+shift_extend_cutrun: ""
+shift_extend_cuttag: "--nomodel --shift -75 --extsize 150"
+shift_extend_atac:   "--nomodel --shift -100 --extsize 200"
+
+# ---- Coverage tracks (deepTools) ------------------------------------------
+bigwig_norm: RPKM                          # RPKM|CPM|BPM|RPGC|None
+bigwig_binsize: 25
+bigwig_extend: 150
+
+# ---- Tool paths (or leave as bare names to use PATH) ----------------------
+bwa: bwa
+samtools: samtools
+bedtools: bedtools
+macs3: macs3                                 # set 'macs2: macs2' instead to force MACS2
+fastqc: fastqc
+bamcoverage: bamCoverage
+multiqc: multiqc
+picard: picard
+rscript: Rscript
+phantompeak_rscript: ""                     # path to run_spp.R to enable NSC/RSC
+
+# ---- SLURM (run_mode: slurm) ----------------------------------------------
+slurm_partition: general
+slurm_time: 24:00:00
+slurm_mem: 32G
+
+# ---- PBS (run_mode: pbs) --------------------------------------------------
+pbs_queue: batch
+pbs_time: 24:00:00
+pbs_mem: 32gb

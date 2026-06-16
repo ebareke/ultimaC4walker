@@ -1,0 +1,27 @@
+# ultimaC4walker conda environment.
+#
+#   mamba env create -f environment.yml
+#   mamba activate c4walker
+#   export C4_LIBDIR="$PWD/lib"; ./bin/c4walker run -c config/config.yaml -s config/samples.tsv
+#
+# The same file is consumed at Docker build time (see Dockerfile). Versions are
+# kept as compatible lower bounds so the bioconda solver stays consistent
+# (over-pinning every package triggers openssl/libcurl conflicts).
+name: c4walker
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python >=3.9,<3.11        # MACS2 2.2.x requires python <3.11
+  - bwa
+  - samtools >=1.18
+  - bedtools >=2.30
+  - macs3 >=3.0          # maintained MACS; MACS2-compatible callpeak CLI
+  - fastqc
+  - picard
+  - preseq
+  - deeptools >=3.5
+  - phantompeakqualtools
+  - r-base
+  - ucsc-bedgraphtobigwig
+  - multiqc

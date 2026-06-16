@@ -1,0 +1,46 @@
+# Apptainer / Singularity definition for ultimaC4walker.
+#
+# Two ways to build:
+#
+#   # (a) From the published container image (recommended once it exists):
+#   apptainer build c4walker.sif containers/c4walker.def
+#
+#   # (b) From a locally-built Docker image, no registry needed:
+#   docker build -t ultimac4walker:1.0.0 .
+#   apptainer build c4walker.sif docker-daemon://ultimac4walker:1.0.0
+#
+# The resulting .sif bundles c4walker plus bwa, samtools, bedtools, MACS2,
+# FastQC, Picard, preseq, deepTools, phantompeakqualtools and MultiQC, so it
+# runs the entire FASTQ -> peaks/QC pipeline on an HPC cluster without Docker.
+
+Bootstrap: docker
+From: ghcr.io/ebareke/ultimac4walker:1.0.0
+
+%labels
+    Author        Eric Bareke, Ethan M., Conrad B.
+    Version       1.0.0
+    Description   Chromatin-profiling workflow (ChIP-seq, CUT&RUN, CUT&Tag, ATAC-seq)
+    Homepage      https://ebareke.github.io/ultimaC4walker/
+
+%help
+    ultimaC4walker — chromatin-profiling processing & QC workflow.
+
+    Usage:
+        apptainer run c4walker.sif run \
+            -c config.yaml -s samples.tsv
+
+    Bundled tools: c4walker, bwa, samtools, bedtools, macs2, fastqc, picard,
+    preseq, deeptools, phantompeakqualtools, multiqc.
+    See https://ebareke.github.io/ultimaC4walker/ for full documentation.
+
+%environment
+    export PATH=/opt/conda/bin:/usr/local/bin:$PATH
+    export C4_LIBDIR=/opt/c4walker/lib
+    export PHANTOMPEAK_RSCRIPT=/opt/conda/bin/run_spp.R
+    export LC_ALL=C
+
+%runscript
+    exec c4walker "$@"
+
+%test
+    c4walker version

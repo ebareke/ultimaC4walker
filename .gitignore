@@ -1,0 +1,31 @@
+# Pipeline outputs
+c4walker_out/
+test_results/
+example/results/
+
+# Generated example inputs (reproduced deterministically by make_synthetic.py)
+example/data/*.fastq.gz
+example/data/*.fa
+example/data/*.fai
+example/data/*.bam
+example/data/*.bam.bai
+example/data/bwa/
+example/data/config.yaml
+example/data/samples.tsv
+example/data/samplesheet.csv
+
+# Nextflow
+.nextflow/
+.nextflow.log*
+work/
+
+# Container images
+*.sif
+
+# Local agent / tooling files (not part of the published project)
+CLAUDE.md
+AGENTS.md
+.claude/
+
+# macOS
+.DS_Store

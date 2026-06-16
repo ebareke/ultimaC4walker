@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Lint the engine and libraries
+        run: shellcheck -x bin/c4walker lib/*.sh tests/*.sh example/run_example.sh
+
+  test:
+    name: dry-run suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the tool-free dry-run test suite
+        run: bash tests/test_c4walker.sh
+      - name: Exercise the example in dry-run mode
+        run: bash example/run_example.sh
+
+  nf-stub:
+    name: nextflow -stub
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nxf_version: ['24.10.5', 'latest-stable']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: ${{ matrix.nxf_version }}
+      - name: Generate the synthetic test dataset
+        run: python3 example/scripts/make_synthetic.py
+      - name: Stub-run the pipeline (validates topology, no tools)
+        run: nextflow run nextflow/main.nf -profile test -stub --outdir ci_results

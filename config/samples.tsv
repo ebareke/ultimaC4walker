@@ -1,0 +1,8 @@
+SAMPLE_ID	FASTQ1	FASTQ2	ASSAY	MARK	CONTROL_ID	LIBTYPE
+H3K27me3_rep1	/data/fastq/H3K27me3_rep1_R1.fastq.gz	/data/fastq/H3K27me3_rep1_R2.fastq.gz	CUTTAG	H3K27me3	None	PE
+H3K27me3_rep2	/data/fastq/H3K27me3_rep2_R1.fastq.gz	/data/fastq/H3K27me3_rep2_R2.fastq.gz	CUTTAG	H3K27me3	None	PE
+H3K4me3_rep1	/data/fastq/H3K4me3_rep1_R1.fastq.gz	/data/fastq/H3K4me3_rep1_R2.fastq.gz	CUTRUN	H3K4me3	IgG_rep1	PE
+IgG_rep1	/data/fastq/IgG_rep1_R1.fastq.gz	/data/fastq/IgG_rep1_R2.fastq.gz	CUTRUN	IgG	None	PE
+TF_chip_rep1	/data/fastq/TF_chip_rep1_R1.fastq.gz	-	CHIPSEQ	CTCF	input_rep1	SE
+input_rep1	/data/fastq/input_rep1_R1.fastq.gz	-	CHIPSEQ	Input	None	SE
+ATAC_rep1	/data/fastq/ATAC_rep1_R1.fastq.gz	/data/fastq/ATAC_rep1_R2.fastq.gz	ATAC	NA	None	PE
