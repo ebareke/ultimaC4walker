@@ -53,6 +53,6 @@ extension"). Reference issues where relevant.
 
 ## Maintainers
 
-- Eric Bareke — <bareke.eric@gmail.com>
-- Ethan M. — <eb.bioinfo+ethan@pm.me>
-- Conrad B. — <eb.bioinfo+conrad@pm.me>
+- Eric B. — <eb.bioinfo@pm.me>
+- Ethan M. — <eb.bioinfo@pm.me>
+- Conrad B. — <eb.bioinfo@pm.me>
