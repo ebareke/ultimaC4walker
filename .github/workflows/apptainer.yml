@@ -1,8 +1,9 @@
 name: Apptainer image (HPC)
 
-# Builds an Apptainer/Singularity SIF from the published container image,
-# smoke-tests it under Apptainer, and publishes it to GHCR as an OCI artifact
-# (oras://). Pre-seed an HPC cache from GHCR, e.g.:
+# Builds the Docker image in-job, converts it to an Apptainer/Singularity SIF
+# straight from the local Docker daemon (so it does NOT depend on a published
+# GHCR/Docker Hub image existing), smoke-tests it, and optionally publishes the
+# SIF to GHCR as an OCI artifact (oras://). Pre-seed an HPC cache from GHCR, e.g.:
 #   apptainer pull oras://ghcr.io/ebareke/ultimac4walker-apptainer:1.0.0
 #
 # Safety: only static values + the built-in GITHUB_TOKEN are referenced; no
@@ -24,17 +25,28 @@ env:
   APPTAINER_VERSION: '1.3.6'
   SIF_NAME: ultimac4walker
   SIF_TAG: '1.0.0'
+  LOCAL_IMAGE: ultimac4walker:1.0.0
 
 jobs:
   build-sif:
     name: build + test SIF
     runs-on: ubuntu-latest
     env:
-      SRC_IMAGE: docker://ghcr.io/${{ github.repository_owner }}/ultimac4walker:1.0.0
       OWNER: ${{ github.repository_owner }}
       ACTOR: ${{ github.actor }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          set -euxo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          df -h /
+
+      - name: Build the Docker image
+        run: docker build -t "$LOCAL_IMAGE" .
+
       - name: Install Apptainer (pinned .deb — no JS action)
         run: |
           set -euxo pipefail
@@ -44,17 +56,11 @@ jobs:
           sudo apt-get install -y "./apptainer_${APPTAINER_VERSION}_amd64.deb"
           apptainer --version
 
-      - name: Log in to GHCR for the source pull
-        run: |
-          set -euxo pipefail
-          printf '%s' "$GHCR_TOKEN" \
-            | apptainer registry login -u "$ACTOR" --password-stdin oras://ghcr.io
-
-      - name: Build SIF from the published image
+      - name: Build SIF from the local Docker daemon
         run: |
           set -euxo pipefail
           df -h /
-          apptainer build "${SIF_NAME}.sif" "$SRC_IMAGE"
+          apptainer build "${SIF_NAME}.sif" "docker-daemon://${LOCAL_IMAGE}"
 
       - name: Smoke test under Apptainer
         run: apptainer run "${SIF_NAME}.sif" version
@@ -63,5 +69,7 @@ jobs:
         if: ${{ inputs.push }}
         run: |
           set -euxo pipefail
+          printf '%s' "$GHCR_TOKEN" \
+            | apptainer registry login -u "$ACTOR" --password-stdin oras://ghcr.io
           apptainer push "${SIF_NAME}.sif" \
             "oras://ghcr.io/${OWNER}/${SIF_NAME}-apptainer:${SIF_TAG}"
