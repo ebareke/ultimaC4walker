@@ -1,0 +1,44 @@
+name: Release
+
+# On a v* tag: run the dry-run test suite as a gate, package the standalone
+# tool into a tarball, and publish a GitHub Release with auto-generated notes.
+# Container/SIF images are published by containers.yml and apptainer.yml, which
+# also trigger on v* tags. Uses only the built-in GITHUB_TOKEN.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: package + release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gate on the dry-run test suite
+        run: bash tests/test_c4walker.sh
+
+      - name: Package the standalone tool
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euxo pipefail
+          name="ultimaC4walker-${REF_NAME}"
+          mkdir -p "dist/${name}"
+          cp -r bin lib config environment.yml Makefile README.md USAGE.md \
+                CHANGELOG.md LICENSE example "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          generate_release_notes: true
