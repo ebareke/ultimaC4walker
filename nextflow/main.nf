@@ -60,8 +60,7 @@ workflow {
     MULTIQC(C4WALKER.out.qc.mix(C4WALKER.out.peaks).collect())
 }
 
-workflow.onComplete {
-    log.info ( workflow.success
-        ? "\n[ultimaC4walker] Done. Results in: ${params.outdir}\n"
-        : "\n[ultimaC4walker] Pipeline failed. See .nextflow.log\n" )
-}
+// Note: a custom `workflow.onComplete` handler is intentionally omitted —
+// Nextflow's built-in completion summary already reports success/failure and
+// the results path, and a top-level handler is rejected by the strict language
+// parser in Nextflow 26.x. Results are published under `params.outdir`.
