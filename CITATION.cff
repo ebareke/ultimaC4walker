@@ -10,13 +10,13 @@ url: "https://ebareke.github.io/ultimaC4walker/"
 authors:
   - given-names: Eric
     family-names: Bareke
-    email: bareke.eric@gmail.com
+    email: eb.bioinfo@pm.me
   - given-names: Ethan
     family-names: M.
-    email: eb.bioinfo+ethan@pm.me
+    email: eb.bioinfo@pm.me
   - given-names: Conrad
     family-names: B.
-    email: eb.bioinfo+conrad@pm.me
+    email: eb.bioinfo@pm.me
 keywords:
   - ChIP-seq
   - CUT&RUN
