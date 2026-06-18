@@ -16,7 +16,12 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['Dockerfile', 'environment.yml', 'bin/**', 'lib/**']
+    paths:
+      - 'Dockerfile'
+      - 'environment.yml'
+      - 'bin/**'
+      - 'lib/**'
+      - '.github/workflows/containers.yml'
     tags: ['v*']
 
 permissions:

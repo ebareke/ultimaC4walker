@@ -151,6 +151,14 @@ docs/               published documentation site
 | [ROADMAP.md](ROADMAP.md) | Planned work |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [SECURITY.md](SECURITY.md) | Security model and reporting |
+| [CITATION.md](CITATION.md) · [CITATION.cff](CITATION.cff) | How to cite ultimaC4walker |
+
+## Citing
+
+If you use ultimaC4walker in your research, please cite it — see
+[CITATION.md](CITATION.md) for software, BibTeX and APA entries plus the
+underlying tools to credit. GitHub's **“Cite this repository”** button is
+generated from [CITATION.cff](CITATION.cff).
 
 ## Authors
 

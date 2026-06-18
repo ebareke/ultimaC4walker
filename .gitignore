@@ -1,6 +1,7 @@
 # Pipeline outputs
 c4walker_out/
 test_results/
+ci_results/
 example/results/
 
 # Generated example inputs (reproduced deterministically by make_synthetic.py)
